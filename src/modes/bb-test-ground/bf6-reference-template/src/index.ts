@@ -6,9 +6,11 @@ import { Vectors } from 'bf6-portal-utils/vectors/index.ts';
 
 import { DebugTool } from './debug-tool/index.ts';
 import { getPlayerStateVectorString } from './helpers/index.ts';
+import { ReloadDetector } from './reload-detector/index.ts';
 
 let adminDebugTool: DebugTool | undefined;
 let telemetryInterval: number | undefined;
+let reloadDetector: ReloadDetector | undefined;
 
 async function spawnVehicle(player: mod.Player, vehicleType: mod.VehicleList): Promise<void> {
     const playerPosition = mod.GetSoldierState(player, mod.SoldierStateVector.GetPosition);
@@ -104,6 +106,12 @@ function createAdminDebugTool(player: mod.Player): void {
         adminDebugTool?.showDebugMenu();
     });
 
+    // Create a reload detector to open the debug menu after 5 reloads within 30 seconds.
+    reloadDetector = new ReloadDetector(player, () => {
+        adminDebugTool?.showDebugMenu();
+        adminDebugTool?.dynamicLog('Debug menu opened via 5-reload trigger!');
+    });
+
     // Add a debug menu button to spawn an AH64 helicopter.
     adminDebugTool?.addDebugMenuButton(
         mod.Message(mod.stringkeys.template.debug.buttons.spawnHelicopter),
@@ -124,11 +132,13 @@ function destroyAdminDebugTool(playerId: number): void {
     // If the player is not the admin player, then we know the admin is still in the game, so we can exit this function.
     if (playerId !== 0) return;
 
-    // Clear the telemetry interval so it doesn't continue to log the admin's position and facing direction, and
-    // destroy the debug tool.
+    // Clear the telemetry interval so it doesn't continue to log the admin's position and facing direction,
+    // destroy the reload detector, and destroy the debug tool.
     Timers.clearInterval(telemetryInterval);
+    reloadDetector?.destroy();
     adminDebugTool?.destroy();
     telemetryInterval = undefined;
+    reloadDetector = undefined;
     adminDebugTool = undefined;
 }
 

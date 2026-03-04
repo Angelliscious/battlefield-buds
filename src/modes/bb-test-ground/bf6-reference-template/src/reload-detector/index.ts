@@ -1,8 +1,8 @@
 import { Timers } from 'bf6-portal-utils/timers/index.ts';
 
 /**
- * Detects 5 consecutive reloads within 30 seconds and triggers a callback.
- * Monitors soldier state for reload transitions.
+ * Detects 5 consecutive reload button presses within 30 seconds and triggers a callback.
+ * Monitors soldier reload state for button press transitions.
  */
 export class ReloadDetector {
     private player: mod.Player;
@@ -26,16 +26,16 @@ export class ReloadDetector {
         this.pollTimerId = Timers.setInterval(() => {
             const isCurrentlyReloading = mod.GetSoldierState(this.player, mod.SoldierStateBool.IsReloading);
 
-            // Detect transition from reloading to not reloading (reload completed)
-            if (this.wasReloading && !isCurrentlyReloading) {
-                this.onReloadDetected();
+            // Detect transition from not reloading to reloading (reload button press)
+            if (!this.wasReloading && isCurrentlyReloading) {
+                this.onReloadButtonPressed();
             }
 
             this.wasReloading = isCurrentlyReloading;
         }, this.POLL_INTERVAL_MS);
     }
 
-    private onReloadDetected(): void {
+    private onReloadButtonPressed(): void {
         const currentTime = mod.GetMatchTimeElapsed();
 
         // Check if reload is within the 30-second window

@@ -126,6 +126,49 @@ function createAdminDebugTool(player: mod.Player): void {
         async () => await spawnVehicle(player, mod.VehicleList.GolfCart)
     );
 
+    // Debug Tools section
+    adminDebugTool?.addDebugMenuButton(
+        mod.Message('Debug Tools: Show Static Logger'),
+        async () => {
+            adminDebugTool?.showStaticLogger();
+        }
+    );
+
+    adminDebugTool?.addDebugMenuButton(
+        mod.Message('Debug Tools: Show Dynamic Logger'),
+        async () => {
+            adminDebugTool?.showDynamicLogger();
+        }
+    );
+
+    adminDebugTool?.addDebugMenuButton(
+        mod.Message('Debug Tools: Hide Static Logger'),
+        async () => {
+            adminDebugTool?.hideStaticLogger();
+        }
+    );
+
+    adminDebugTool?.addDebugMenuButton(
+        mod.Message('Debug Tools: Hide Dynamic Logger'),
+        async () => {
+            adminDebugTool?.hideDynamicLogger();
+        }
+    );
+
+    adminDebugTool?.addDebugMenuButton(
+        mod.Message('Debug Tools: Clear Static Logger'),
+        async () => {
+            adminDebugTool?.clearStaticLogger();
+        }
+    );
+
+    adminDebugTool?.addDebugMenuButton(
+        mod.Message('Debug Tools: Clear Dynamic Logger'),
+        async () => {
+            adminDebugTool?.clearDynamicLogger();
+        }
+    );
+
     // Log a message to the static logger.
     adminDebugTool?.staticLog(`Triple-click interact key to open debug menu.`, 0);
 }

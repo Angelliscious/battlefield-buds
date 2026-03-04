@@ -4,7 +4,7 @@ import { Timers } from 'bf6-portal-utils/timers/index.ts';
  * Detects 5 consecutive jump actions within 30 seconds and triggers a callback.
  * Monitors soldier jump state for leap transitions.
  */
-export class ReloadDetector {
+export class JumpDetector {
     private player: mod.Player;
     private actionCount: number = 0;
     private lastActionTime: number = -Infinity;

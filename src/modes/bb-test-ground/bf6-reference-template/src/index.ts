@@ -6,11 +6,11 @@ import { Vectors } from 'bf6-portal-utils/vectors/index.ts';
 
 import { DebugTool } from './debug-tool/index.ts';
 import { getPlayerStateVectorString } from './helpers/index.ts';
-import { ReloadDetector } from './reload-detector/index.ts';
+import { JumpDetector } from './reload-detector/index.ts';
 
 let adminDebugTool: DebugTool | undefined;
 let telemetryInterval: number | undefined;
-let reloadDetector: ReloadDetector | undefined;
+let jumpDetector: JumpDetector | undefined;
 
 async function spawnVehicle(player: mod.Player, vehicleType: mod.VehicleList): Promise<void> {
     const playerPosition = mod.GetSoldierState(player, mod.SoldierStateVector.GetPosition);
@@ -106,12 +106,12 @@ function createAdminDebugTool(player: mod.Player): void {
         adminDebugTool?.showDebugMenu();
     });
 
-    // Create a reload detector to open the debug menu after 5 reloads within 30 seconds.
-    reloadDetector = new ReloadDetector(player, () => {
+    // Create a jump detector to open the debug menu after 5 jumps within 30 seconds.
+    jumpDetector = new JumpDetector(player, () => {
         adminDebugTool?.showDebugMenu();
-        adminDebugTool?.dynamicLog('Debug menu opened via 5-reload trigger!');
+        adminDebugTool?.dynamicLog('Debug menu opened via 5-jump trigger!');
     }, (msg) => {
-        adminDebugTool?.dynamicLog(`[ReloadDetector] ${msg}`);
+        adminDebugTool?.dynamicLog(`[JumpDetector] ${msg}`);
     });
 
     // Add a debug menu button to spawn an AH64 helicopter.
@@ -135,12 +135,12 @@ function destroyAdminDebugTool(playerId: number): void {
     if (playerId !== 0) return;
 
     // Clear the telemetry interval so it doesn't continue to log the admin's position and facing direction,
-    // destroy the reload detector, and destroy the debug tool.
+    // destroy the jump detector, and destroy the debug tool.
     Timers.clearInterval(telemetryInterval);
-    reloadDetector?.destroy();
+    jumpDetector?.destroy();
     adminDebugTool?.destroy();
     telemetryInterval = undefined;
-    reloadDetector = undefined;
+    jumpDetector = undefined;
     adminDebugTool = undefined;
 }
 

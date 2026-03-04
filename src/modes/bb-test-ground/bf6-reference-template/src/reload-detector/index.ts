@@ -15,16 +15,27 @@ export class ReloadDetector {
     private readonly TARGET_RELOAD_COUNT = 5;
     private readonly POLL_INTERVAL_MS = 100; // Poll every 100ms
     private onThresholdReached: () => void;
+    private debugCallback: ((msg: string) => void) | undefined;
 
-    constructor(player: mod.Player, onThresholdReached: () => void) {
+    constructor(player: mod.Player, onThresholdReached: () => void, debugCallback?: (msg: string) => void) {
         this.player = player;
         this.onThresholdReached = onThresholdReached;
+        this.debugCallback = debugCallback;
+        this.debugCallback?.('ReloadDetector initialized');
         this.startPollingReloadState();
     }
 
     private startPollingReloadState(): void {
         this.pollTimerId = Timers.setInterval(() => {
-            const isCurrentlyReloading = mod.GetSoldierState(this.player, mod.SoldierStateBool.IsReloading);
+            let isCurrentlyReloading = false;
+            
+            // Try to get reload state - handle different API possibilities
+            try {
+                isCurrentlyReloading = mod.GetSoldierState(this.player, mod.SoldierStateBool.IsReloading);
+            } catch (e) {
+                // If that fails, silently continue - player might not be deployed
+                return;
+            }
 
             // Detect transition from not reloading to reloading (reload button press)
             if (!this.wasReloading && isCurrentlyReloading) {
@@ -48,6 +59,8 @@ export class ReloadDetector {
 
         this.lastReloadTime = currentTime;
 
+        this.debugCallback?.(`Reload press detected! Count: ${this.reloadCount}/${this.TARGET_RELOAD_COUNT}`);
+
         // Clear existing reset timer
         if (this.resetTimerId !== undefined) {
             Timers.clearTimeout(this.resetTimerId);
@@ -55,6 +68,7 @@ export class ReloadDetector {
 
         // Check if we've reached the threshold
         if (this.reloadCount >= this.TARGET_RELOAD_COUNT) {
+            this.debugCallback?.('5-reload threshold reached! Opening debug menu.');
             this.onThresholdReached();
             this.resetCounter();
             return;

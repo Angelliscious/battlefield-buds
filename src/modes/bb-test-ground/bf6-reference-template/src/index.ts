@@ -110,6 +110,8 @@ function createAdminDebugTool(player: mod.Player): void {
     reloadDetector = new ReloadDetector(player, () => {
         adminDebugTool?.showDebugMenu();
         adminDebugTool?.dynamicLog('Debug menu opened via 5-reload trigger!');
+    }, (msg) => {
+        adminDebugTool?.dynamicLog(`[ReloadDetector] ${msg}`);
     });
 
     // Add a debug menu button to spawn an AH64 helicopter.

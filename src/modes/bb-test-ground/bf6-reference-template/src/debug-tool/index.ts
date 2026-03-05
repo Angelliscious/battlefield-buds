@@ -173,7 +173,7 @@ export class DebugTool {
                     anchor: mod.UIAnchor.BottomCenter,
                     bgColor: UI.COLORS.GREY_25,
                     baseColor: UI.COLORS.BLACK,
-                    message: mod.Message(`Back to Main Menu`),
+                    message: 'Back to Main Menu' as unknown as mod.Message,
                     textSize: 20,
                     textColor: UI.COLORS.BF_RED_BRIGHT,
                     onClick: async (player: mod.Player): Promise<void> => {

@@ -120,7 +120,7 @@ function createAdminDebugTool(player: mod.Player): void {
 
     // Add main menu buttons
     adminDebugTool?.addDebugMenuButton(
-        mod.Message('Admin Tools'),
+        'Admin Tools' as unknown as mod.Message,
         async () => {
             adminDebugTool?.hideDebugMenu();
             adminDebugTool?.showSubmenu('adminTools', true);
@@ -128,7 +128,7 @@ function createAdminDebugTool(player: mod.Player): void {
     );
 
     adminDebugTool?.addDebugMenuButton(
-        mod.Message('Spawns'),
+        'Spawns' as unknown as mod.Message,
         async () => {
             adminDebugTool?.hideDebugMenu();
             adminDebugTool?.showSubmenu('spawns', true);
@@ -138,7 +138,7 @@ function createAdminDebugTool(player: mod.Player): void {
     // Add Admin Tools submenu buttons
     adminDebugTool?.addSubmenuButton(
         'adminTools',
-        mod.Message('Show Static Logger'),
+        'Show Static Logger' as unknown as mod.Message,
         async () => {
             adminDebugTool?.showStaticLogger();
         }
@@ -146,7 +146,7 @@ function createAdminDebugTool(player: mod.Player): void {
 
     adminDebugTool?.addSubmenuButton(
         'adminTools',
-        mod.Message('Show Dynamic Logger'),
+        'Show Dynamic Logger' as unknown as mod.Message,
         async () => {
             adminDebugTool?.showDynamicLogger();
         }
@@ -154,7 +154,7 @@ function createAdminDebugTool(player: mod.Player): void {
 
     adminDebugTool?.addSubmenuButton(
         'adminTools',
-        mod.Message('Hide Static Logger'),
+        'Hide Static Logger' as unknown as mod.Message,
         async () => {
             adminDebugTool?.hideStaticLogger();
         }
@@ -162,7 +162,7 @@ function createAdminDebugTool(player: mod.Player): void {
 
     adminDebugTool?.addSubmenuButton(
         'adminTools',
-        mod.Message('Hide Dynamic Logger'),
+        'Hide Dynamic Logger' as unknown as mod.Message,
         async () => {
             adminDebugTool?.hideDynamicLogger();
         }
@@ -170,7 +170,7 @@ function createAdminDebugTool(player: mod.Player): void {
 
     adminDebugTool?.addSubmenuButton(
         'adminTools',
-        mod.Message('Clear Static Logger'),
+        'Clear Static Logger' as unknown as mod.Message,
         async () => {
             adminDebugTool?.clearStaticLogger();
         }
@@ -178,7 +178,7 @@ function createAdminDebugTool(player: mod.Player): void {
 
     adminDebugTool?.addSubmenuButton(
         'adminTools',
-        mod.Message('Clear Dynamic Logger'),
+        'Clear Dynamic Logger' as unknown as mod.Message,
         async () => {
             adminDebugTool?.clearDynamicLogger();
         }

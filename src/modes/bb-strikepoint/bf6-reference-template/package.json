@@ -1,9 +1,9 @@
 {
-    "name": "bf6-portal-scripting-template",
-    "experienceName": "Scripting Template",
-    "version": "1.5.0",
+    "name": "bb-strikepoint",
+    "experienceName": "bb-strikepoint",
+    "version": "1.0.0",
     "type": "module",
-    "description": "Scripting template for Battlefield 6 Portal (use \"Use this template\" on GitHub to create a new project)",
+    "description": "Battlefield Buds Strikepoint game mode",
     "engines": {
         "node": ">=24.0.0"
     },
@@ -22,10 +22,6 @@
         "deploy:minor": "npm run build && node scripts/deploy.js --script dist/bundle.ts --strings dist/bundle.strings.json --versionBump minor",
         "deploy:major": "npm run build && node scripts/deploy.js --script dist/bundle.ts --strings dist/bundle.strings.json --versionBump major"
     },
-    "repository": {
-        "type": "git",
-        "url": "git+https://github.com/deluca-mike/bf6-portal-scripting-template.git"
-    },
     "keywords": [
         "template",
         "portal",
@@ -33,12 +29,8 @@
         "battlefield-6",
         "bf6"
     ],
-    "author": "Michael De Luca",
+    "author": "Angelliscious",
     "license": "MIT",
-    "bugs": {
-        "url": "https://github.com/deluca-mike/bf6-portal-scripting-template/issues"
-    },
-    "homepage": "https://github.com/deluca-mike/bf6-portal-scripting-template#readme",
     "devDependencies": {
         "@bf6mods/portal": "^1.1.0",
         "@clack/prompts": "^1.0.1",
@@ -57,5 +49,6 @@
         "ts-node": "^10.9.2",
         "typescript": "^5.9.3",
         "typescript-eslint": "^8.56.0"
-    }
+    },
+    "templateVersion": "1.5.0"
 }

@@ -4,6 +4,8 @@ import { UIContainer } from 'bf6-portal-utils/ui/components/container/index.ts';
 import { UITextButton } from 'bf6-portal-utils/ui/components/text-button/index.ts';
 
 export class DebugTool {
+    private _submenus: Map<string, UIContainer> = new Map();
+
     public constructor(player: mod.Player, options?: DebugTool.Options) {
         this._player = player;
 
@@ -118,10 +120,17 @@ export class DebugTool {
         this._staticLogger.destroy();
         this._dynamicLogger.destroy();
         this._debugMenu.delete();
+        for (const submenu of this._submenus.values()) {
+            submenu.delete();
+        }
+        this._submenus.clear();
     }
 
     public addDebugMenuButton(text: mod.Message, onClick: (player: mod.Player) => Promise<void>): void {
-        const requiredHeight = (this._debugMenu.children.length + 1) * 20; // If we include the new button.
+        // Count only the top-anchored buttons (not the close button which is bottom-anchored)
+        const topButtonsCount = this._debugMenu.children.filter(child => child.anchor === mod.UIAnchor.TopCenter).length;
+
+        const requiredHeight = (topButtonsCount + 1) * 20; // If we include the new button.
 
         if (requiredHeight > this._debugMenu.height) {
             this._debugMenu.height = requiredHeight;
@@ -129,7 +138,7 @@ export class DebugTool {
 
         new UITextButton({
             x: 0,
-            y: (this._debugMenu.children.length - 1) * 20, // Place second to last.
+            y: topButtonsCount * 20, // Place at the next available top position
             width: 300,
             height: 20,
             anchor: mod.UIAnchor.TopCenter,
@@ -142,6 +151,84 @@ export class DebugTool {
             parent: this._debugMenu,
             receiver: this._player,
         });
+    }
+
+    public createSubmenu(name: string, title: string): void {
+        const submenuConfig: UIContainer.Params = {
+            receiver: this._player,
+            width: 300,
+            height: 200,
+            anchor: mod.UIAnchor.Center,
+            bgColor: UI.COLORS.BLACK,
+            bgFill: mod.UIBgFill.Blur,
+            bgAlpha: 0.8,
+            visible: false,
+            uiInputModeWhenVisible: true,
+            childrenParams: [
+                {
+                    type: UITextButton,
+                    y: 0,
+                    width: 300,
+                    height: 20,
+                    anchor: mod.UIAnchor.BottomCenter,
+                    bgColor: UI.COLORS.GREY_25,
+                    baseColor: UI.COLORS.BLACK,
+                    message: mod.Message(`Back to Main Menu`),
+                    textSize: 20,
+                    textColor: UI.COLORS.BF_RED_BRIGHT,
+                    onClick: async (player: mod.Player): Promise<void> => {
+                        this.showSubmenu(name, false);
+                        this.showDebugMenu();
+                    },
+                },
+            ],
+        };
+
+        const submenu = new UIContainer(submenuConfig);
+        this._submenus.set(name, submenu);
+    }
+
+    public addSubmenuButton(submenuName: string, text: mod.Message, onClick: (player: mod.Player) => Promise<void>): void {
+        const submenu = this._submenus.get(submenuName);
+        if (!submenu) return;
+
+        // Count only the top-anchored buttons (not the back button which is bottom-anchored)
+        const topButtonsCount = submenu.children.filter(child => child.anchor === mod.UIAnchor.TopCenter).length;
+
+        const requiredHeight = (topButtonsCount + 1) * 20 + 20; // +20 for back button
+
+        if (requiredHeight > submenu.height) {
+            submenu.height = requiredHeight;
+        }
+
+        new UITextButton({
+            x: 0,
+            y: topButtonsCount * 20,
+            width: 300,
+            height: 20,
+            anchor: mod.UIAnchor.TopCenter,
+            bgColor: UI.COLORS.GREY_25,
+            baseColor: UI.COLORS.BLACK,
+            message: text,
+            textSize: 20,
+            textColor: UI.COLORS.BF_GREEN_BRIGHT,
+            onClick,
+            parent: submenu,
+            receiver: this._player,
+        });
+    }
+
+    public showSubmenu(name: string, show: boolean): void {
+        const submenu = this._submenus.get(name);
+        if (!submenu) return;
+
+        if (show) {
+            submenu.show();
+            mod.EnableUIInputMode(true, this._player);
+        } else {
+            submenu.hide();
+            mod.EnableUIInputMode(false, this._player);
+        }
     }
 }
 

@@ -114,59 +114,87 @@ function createAdminDebugTool(player: mod.Player): void {
         adminDebugTool?.dynamicLog(`[JumpDetector] ${msg}`);
     });
 
-    // Add a debug menu button to spawn an AH64 helicopter.
+    // Create submenus
+    adminDebugTool?.createSubmenu('adminTools', 'Admin Tools');
+    adminDebugTool?.createSubmenu('spawns', 'Spawns');
+
+    // Add main menu buttons
     adminDebugTool?.addDebugMenuButton(
-        mod.Message(mod.stringkeys.template.debug.buttons.spawnHelicopter),
-        async () => await spawnVehicle(player, mod.VehicleList.AH64)
+        mod.Message('Admin Tools'),
+        async () => {
+            adminDebugTool?.hideDebugMenu();
+            adminDebugTool?.showSubmenu('adminTools', true);
+        }
     );
 
-    // Add a debug menu button to spawn a golf cart.
     adminDebugTool?.addDebugMenuButton(
-        mod.Message(mod.stringkeys.template.debug.buttons.spawnGolfCart),
-        async () => await spawnVehicle(player, mod.VehicleList.GolfCart)
+        mod.Message('Spawns'),
+        async () => {
+            adminDebugTool?.hideDebugMenu();
+            adminDebugTool?.showSubmenu('spawns', true);
+        }
     );
 
-    // Debug Tools section
-    adminDebugTool?.addDebugMenuButton(
-        mod.Message('Debug Tools: Show Static Logger'),
+    // Add Admin Tools submenu buttons
+    adminDebugTool?.addSubmenuButton(
+        'adminTools',
+        mod.Message('Show Static Logger'),
         async () => {
             adminDebugTool?.showStaticLogger();
         }
     );
 
-    adminDebugTool?.addDebugMenuButton(
-        mod.Message('Debug Tools: Show Dynamic Logger'),
+    adminDebugTool?.addSubmenuButton(
+        'adminTools',
+        mod.Message('Show Dynamic Logger'),
         async () => {
             adminDebugTool?.showDynamicLogger();
         }
     );
 
-    adminDebugTool?.addDebugMenuButton(
-        mod.Message('Debug Tools: Hide Static Logger'),
+    adminDebugTool?.addSubmenuButton(
+        'adminTools',
+        mod.Message('Hide Static Logger'),
         async () => {
             adminDebugTool?.hideStaticLogger();
         }
     );
 
-    adminDebugTool?.addDebugMenuButton(
-        mod.Message('Debug Tools: Hide Dynamic Logger'),
+    adminDebugTool?.addSubmenuButton(
+        'adminTools',
+        mod.Message('Hide Dynamic Logger'),
         async () => {
             adminDebugTool?.hideDynamicLogger();
         }
     );
 
-    adminDebugTool?.addDebugMenuButton(
-        mod.Message('Debug Tools: Clear Static Logger'),
+    adminDebugTool?.addSubmenuButton(
+        'adminTools',
+        mod.Message('Clear Static Logger'),
         async () => {
             adminDebugTool?.clearStaticLogger();
         }
     );
 
-    adminDebugTool?.addDebugMenuButton(
-        mod.Message('Debug Tools: Clear Dynamic Logger'),
+    adminDebugTool?.addSubmenuButton(
+        'adminTools',
+        mod.Message('Clear Dynamic Logger'),
         async () => {
             adminDebugTool?.clearDynamicLogger();
         }
+    );
+
+    // Add Spawns submenu buttons
+    adminDebugTool?.addSubmenuButton(
+        'spawns',
+        mod.Message(mod.stringkeys.template.debug.buttons.spawnHelicopter),
+        async () => await spawnVehicle(player, mod.VehicleList.AH64)
+    );
+
+    adminDebugTool?.addSubmenuButton(
+        'spawns',
+        mod.Message(mod.stringkeys.template.debug.buttons.spawnGolfCart),
+        async () => await spawnVehicle(player, mod.VehicleList.GolfCart)
     );
 
     // Log a message to the static logger.

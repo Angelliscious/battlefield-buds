@@ -6,7 +6,7 @@ import { Vectors } from 'bf6-portal-utils/vectors/index.ts';
 
 import { DebugTool } from './debug-tool/index.ts';
 import { getPlayerStateVectorString } from './helpers/index.ts';
-import { JumpDetector } from './reload-detector/index.ts';
+import { JumpDetector } from './jump-detector/index.ts';
 
 let adminDebugTool: DebugTool | undefined;
 let telemetryInterval: number | undefined;
@@ -101,6 +101,15 @@ function createAdminDebugTool(player: mod.Player): void {
 
     adminDebugTool = new DebugTool(player, debugToolOptions);
 
+    // Subscribe to vehicle events for loadout management
+    Events.OnPlayerEnterVehicle.subscribe((eventPlayer, vehicle) => {
+        adminDebugTool?.onPlayerEnterVehicle(eventPlayer, vehicle);
+    });
+
+    Events.OnPlayerExitVehicle.subscribe((eventPlayer, vehicle) => {
+        adminDebugTool?.onPlayerExitVehicle(eventPlayer, vehicle);
+    });
+
     // Create a multi-click detector to open the debug menu when the player triple-clicks the interact key.
     new MultiClickDetector(player, () => {
         adminDebugTool?.showDebugMenu();
@@ -117,10 +126,14 @@ function createAdminDebugTool(player: mod.Player): void {
     // Create submenus
     adminDebugTool?.createSubmenu('adminTools', 'Admin Tools');
     adminDebugTool?.createSubmenu('spawns', 'Spawns');
+    adminDebugTool?.createSubmenu('groundVehicles', 'Ground Vehicles');
+    adminDebugTool?.createSubmenu('aircraft', 'Aircraft');
+    adminDebugTool?.createSubmenu('helicopters', 'Helicopters');
+    adminDebugTool?.createSubmenu('boats', 'Boats');
 
     // Add main menu buttons
     adminDebugTool?.addDebugMenuButton(
-        'Admin Tools' as unknown as mod.Message,
+        mod.Message(mod.stringkeys.debugTool.buttons.adminTools),
         async () => {
             adminDebugTool?.hideDebugMenu();
             adminDebugTool?.showSubmenu('adminTools', true);
@@ -128,17 +141,54 @@ function createAdminDebugTool(player: mod.Player): void {
     );
 
     adminDebugTool?.addDebugMenuButton(
-        'Spawns' as unknown as mod.Message,
+        mod.Message(mod.stringkeys.debugTool.buttons.spawns),
         async () => {
             adminDebugTool?.hideDebugMenu();
             adminDebugTool?.showSubmenu('spawns', true);
         }
     );
 
+    // Add Spawns submenu buttons (vehicle classifications)
+    adminDebugTool?.addSubmenuButton(
+        'spawns',
+        mod.Message(mod.stringkeys.debugTool.buttons.groundVehicles),
+        async () => {
+            adminDebugTool?.showSubmenu('spawns', false);
+            adminDebugTool?.showSubmenu('groundVehicles', true);
+        }
+    );
+
+    adminDebugTool?.addSubmenuButton(
+        'spawns',
+        mod.Message(mod.stringkeys.debugTool.buttons.aircraft),
+        async () => {
+            adminDebugTool?.showSubmenu('spawns', false);
+            adminDebugTool?.showSubmenu('aircraft', true);
+        }
+    );
+
+    adminDebugTool?.addSubmenuButton(
+        'spawns',
+        mod.Message(mod.stringkeys.debugTool.buttons.helicopters),
+        async () => {
+            adminDebugTool?.showSubmenu('spawns', false);
+            adminDebugTool?.showSubmenu('helicopters', true);
+        }
+    );
+
+    adminDebugTool?.addSubmenuButton(
+        'spawns',
+        mod.Message(mod.stringkeys.debugTool.buttons.boats),
+        async () => {
+            adminDebugTool?.showSubmenu('spawns', false);
+            adminDebugTool?.showSubmenu('boats', true);
+        }
+    );
+
     // Add Admin Tools submenu buttons
     adminDebugTool?.addSubmenuButton(
         'adminTools',
-        'Show Static Logger' as unknown as mod.Message,
+        mod.Message(mod.stringkeys.debugTool.buttons.showStaticLogger),
         async () => {
             adminDebugTool?.showStaticLogger();
         }
@@ -146,7 +196,7 @@ function createAdminDebugTool(player: mod.Player): void {
 
     adminDebugTool?.addSubmenuButton(
         'adminTools',
-        'Show Dynamic Logger' as unknown as mod.Message,
+        mod.Message(mod.stringkeys.debugTool.buttons.showDynamicLogger),
         async () => {
             adminDebugTool?.showDynamicLogger();
         }
@@ -154,7 +204,7 @@ function createAdminDebugTool(player: mod.Player): void {
 
     adminDebugTool?.addSubmenuButton(
         'adminTools',
-        'Hide Static Logger' as unknown as mod.Message,
+        mod.Message(mod.stringkeys.debugTool.buttons.hideStaticLogger),
         async () => {
             adminDebugTool?.hideStaticLogger();
         }
@@ -162,7 +212,7 @@ function createAdminDebugTool(player: mod.Player): void {
 
     adminDebugTool?.addSubmenuButton(
         'adminTools',
-        'Hide Dynamic Logger' as unknown as mod.Message,
+        mod.Message(mod.stringkeys.debugTool.buttons.hideDynamicLogger),
         async () => {
             adminDebugTool?.hideDynamicLogger();
         }
@@ -170,7 +220,7 @@ function createAdminDebugTool(player: mod.Player): void {
 
     adminDebugTool?.addSubmenuButton(
         'adminTools',
-        'Clear Static Logger' as unknown as mod.Message,
+        mod.Message(mod.stringkeys.debugTool.buttons.clearStaticLogger),
         async () => {
             adminDebugTool?.clearStaticLogger();
         }
@@ -178,23 +228,143 @@ function createAdminDebugTool(player: mod.Player): void {
 
     adminDebugTool?.addSubmenuButton(
         'adminTools',
-        'Clear Dynamic Logger' as unknown as mod.Message,
+        mod.Message(mod.stringkeys.debugTool.buttons.clearDynamicLogger),
         async () => {
             adminDebugTool?.clearDynamicLogger();
         }
     );
 
-    // Add Spawns submenu buttons
+    // Add Spawns submenu buttons - removed quick helicopter and golf cart spawns
+    // These are now available under faction vehicle menus
+
+    // Add Ground Vehicles (all factions combined)
     adminDebugTool?.addSubmenuButton(
-        'spawns',
-        mod.Message(mod.stringkeys.template.debug.buttons.spawnHelicopter),
+        'groundVehicles',
+        mod.Message(mod.stringkeys.debugTool.buttons.spawnAbrams),
+        async () => await spawnVehicle(player, mod.VehicleList.Abrams)
+    );
+
+    adminDebugTool?.addSubmenuButton(
+        'groundVehicles',
+        mod.Message(mod.stringkeys.debugTool.buttons.spawnCheetah),
+        async () => await spawnVehicle(player, mod.VehicleList.Cheetah)
+    );
+
+    adminDebugTool?.addSubmenuButton(
+        'groundVehicles',
+        mod.Message(mod.stringkeys.debugTool.buttons.spawnCV90),
+        async () => await spawnVehicle(player, mod.VehicleList.CV90)
+    );
+
+    adminDebugTool?.addSubmenuButton(
+        'groundVehicles',
+        mod.Message(mod.stringkeys.debugTool.buttons.spawnFlyer60),
+        async () => await spawnVehicle(player, mod.VehicleList.Flyer60)
+    );
+
+    adminDebugTool?.addSubmenuButton(
+        'groundVehicles',
+        mod.Message(mod.stringkeys.debugTool.buttons.spawnGepard),
+        async () => await spawnVehicle(player, mod.VehicleList.Gepard)
+    );
+
+    adminDebugTool?.addSubmenuButton(
+        'groundVehicles',
+        mod.Message(mod.stringkeys.debugTool.buttons.spawnGolfCart),
+        async () => await spawnVehicle(player, mod.VehicleList.GolfCart)
+    );
+
+    adminDebugTool?.addSubmenuButton(
+        'groundVehicles',
+        mod.Message(mod.stringkeys.debugTool.buttons.spawnLeopard),
+        async () => await spawnVehicle(player, mod.VehicleList.Leopard)
+    );
+
+    adminDebugTool?.addSubmenuButton(
+        'groundVehicles',
+        mod.Message(mod.stringkeys.debugTool.buttons.spawnM2Bradley),
+        async () => await spawnVehicle(player, mod.VehicleList.M2Bradley)
+    );
+
+    adminDebugTool?.addSubmenuButton(
+        'groundVehicles',
+        mod.Message(mod.stringkeys.debugTool.buttons.spawnQuadbike),
+        async () => await spawnVehicle(player, mod.VehicleList.Quadbike)
+    );
+
+    adminDebugTool?.addSubmenuButton(
+        'groundVehicles',
+        mod.Message(mod.stringkeys.debugTool.buttons.spawnVector),
+        async () => await spawnVehicle(player, mod.VehicleList.Vector)
+    );
+
+    // Add Aircraft (all factions combined)
+    adminDebugTool?.addSubmenuButton(
+        'aircraft',
+        mod.Message(mod.stringkeys.debugTool.buttons.spawnF16),
+        async () => await spawnVehicle(player, mod.VehicleList.F16)
+    );
+
+    adminDebugTool?.addSubmenuButton(
+        'aircraft',
+        mod.Message(mod.stringkeys.debugTool.buttons.spawnF22),
+        async () => await spawnVehicle(player, mod.VehicleList.F22)
+    );
+
+    adminDebugTool?.addSubmenuButton(
+        'aircraft',
+        mod.Message(mod.stringkeys.debugTool.buttons.spawnJAS39),
+        async () => await spawnVehicle(player, mod.VehicleList.JAS39)
+    );
+
+    adminDebugTool?.addSubmenuButton(
+        'aircraft',
+        mod.Message(mod.stringkeys.debugTool.buttons.spawnSU57),
+        async () => await spawnVehicle(player, mod.VehicleList.SU57)
+    );
+
+    // Add Helicopters (all factions combined)
+    adminDebugTool?.addSubmenuButton(
+        'helicopters',
+        mod.Message(mod.stringkeys.debugTool.buttons.spawnAH64),
         async () => await spawnVehicle(player, mod.VehicleList.AH64)
     );
 
     adminDebugTool?.addSubmenuButton(
-        'spawns',
-        mod.Message(mod.stringkeys.template.debug.buttons.spawnGolfCart),
-        async () => await spawnVehicle(player, mod.VehicleList.GolfCart)
+        'helicopters',
+        mod.Message(mod.stringkeys.debugTool.buttons.spawnEurocopter),
+        async () => await spawnVehicle(player, mod.VehicleList.Eurocopter)
+    );
+
+    adminDebugTool?.addSubmenuButton(
+        'helicopters',
+        mod.Message(mod.stringkeys.debugTool.buttons.spawnMarauder),
+        async () => await spawnVehicle(player, mod.VehicleList.Marauder)
+    );
+
+    adminDebugTool?.addSubmenuButton(
+        'helicopters',
+        mod.Message(mod.stringkeys.debugTool.buttons.spawnMarauderPax),
+        async () => await spawnVehicle(player, mod.VehicleList.Marauder_Pax)
+    );
+
+    adminDebugTool?.addSubmenuButton(
+        'helicopters',
+        mod.Message(mod.stringkeys.debugTool.buttons.spawnUH60),
+        async () => await spawnVehicle(player, mod.VehicleList.UH60)
+    );
+
+    adminDebugTool?.addSubmenuButton(
+        'helicopters',
+        mod.Message(mod.stringkeys.debugTool.buttons.spawnUH60Pax),
+        async () => await spawnVehicle(player, mod.VehicleList.UH60_Pax)
+    );
+
+    // Add Boats
+    adminDebugTool?.addSubmenuButton(
+        'boats',
+        mod.Message(mod.stringkeys.debugTool.buttons.spawnRHIB),
+        async () => await spawnVehicle(player, mod.VehicleList.RHIB)
     );
 
     // Log a message to the static logger.

@@ -274,6 +274,18 @@ function createAdminDebugTool(player: mod.Player): void {
         async () => await spawnVehicle(player, mod.VehicleList.GolfCart)
     );
 
+        adminDebugTool?.addSubmenuButton(
+        'groundVehicles',
+        mod.Message(mod.stringkeys.debugTool.buttons.spawnMarauder),
+        async () => await spawnVehicle(player, mod.VehicleList.Marauder)
+    );
+
+    adminDebugTool?.addSubmenuButton(
+        'groundVehicles',
+        mod.Message(mod.stringkeys.debugTool.buttons.spawnMarauderPax),
+        async () => await spawnVehicle(player, mod.VehicleList.Marauder_Pax)
+    );
+
     adminDebugTool?.addSubmenuButton(
         'groundVehicles',
         mod.Message(mod.stringkeys.debugTool.buttons.spawnLeopard),
@@ -336,17 +348,7 @@ function createAdminDebugTool(player: mod.Player): void {
         async () => await spawnVehicle(player, mod.VehicleList.Eurocopter)
     );
 
-    adminDebugTool?.addSubmenuButton(
-        'helicopters',
-        mod.Message(mod.stringkeys.debugTool.buttons.spawnMarauder),
-        async () => await spawnVehicle(player, mod.VehicleList.Marauder)
-    );
-
-    adminDebugTool?.addSubmenuButton(
-        'helicopters',
-        mod.Message(mod.stringkeys.debugTool.buttons.spawnMarauderPax),
-        async () => await spawnVehicle(player, mod.VehicleList.Marauder_Pax)
-    );
+//Removed Marauders, now under ground vehicles
 
     adminDebugTool?.addSubmenuButton(
         'helicopters',

@@ -9,11 +9,37 @@ import { getPlayerStateVectorString } from './helpers/index.ts';
 import { JumpDetector } from './jump-detector/index.ts';
 import { armorEvents, armorMod } from './armor-api.ts';
 
-let adminDebugTool: DebugTool | undefined;
-let telemetryInterval: number | undefined;
-let jumpDetector: JumpDetector | undefined;
+const debugToolsByPlayerId = new Map<number, DebugTool>();
+const telemetryIntervalsByPlayerId = new Map<number, number>();
+const jumpDetectorsByPlayerId = new Map<number, JumpDetector>();
+const lastAmmoResupplyByPlayerId = new Map<number, number>();
+
+const AMMO_RESUPPLY_COOLDOWN_MS = 1000;
+
+function getDebugToolForPlayer(player: mod.Player): DebugTool | undefined {
+    return debugToolsByPlayerId.get(mod.GetObjId(player));
+}
+
+function destroyPlayerDebugState(playerId: number): void {
+    const telemetryInterval = telemetryIntervalsByPlayerId.get(playerId);
+    if (telemetryInterval !== undefined) {
+        Timers.clearInterval(telemetryInterval);
+        telemetryIntervalsByPlayerId.delete(playerId);
+    }
+
+    const jumpDetector = jumpDetectorsByPlayerId.get(playerId);
+    jumpDetector?.destroy();
+    jumpDetectorsByPlayerId.delete(playerId);
+
+    const debugTool = debugToolsByPlayerId.get(playerId);
+    debugTool?.destroy();
+    debugToolsByPlayerId.delete(playerId);
+
+    lastAmmoResupplyByPlayerId.delete(playerId);
+}
 
 async function spawnVehicle(player: mod.Player, vehicleType: mod.VehicleList): Promise<void> {
+    const debugTool = getDebugToolForPlayer(player);
     const playerPosition = mod.GetSoldierState(player, mod.SoldierStateVector.GetPosition);
     const playerFacingDirection = mod.GetSoldierState(player, mod.SoldierStateVector.GetFacingDirection);
 
@@ -24,7 +50,7 @@ async function spawnVehicle(player: mod.Player, vehicleType: mod.VehicleList): P
         mod.ZComponentOf(playerPosition) + mod.ZComponentOf(playerFacingDirection) * 20
     );
 
-    adminDebugTool?.dynamicLog(`Spawning vehicle spawner at ${Vectors.getVectorString(position)}`);
+    debugTool?.dynamicLog(`Spawning vehicle spawner at ${Vectors.getVectorString(position)}`);
 
     const spawner = mod.SpawnObject(
         mod.RuntimeSpawn_Common.VehicleSpawner,
@@ -35,13 +61,13 @@ async function spawnVehicle(player: mod.Player, vehicleType: mod.VehicleList): P
     // Need to wait a bit before setting the vehicle spawner settings.
     await mod.Wait(1);
 
-    adminDebugTool?.dynamicLog(`Setting vehicle spawner settings.`);
+    debugTool?.dynamicLog(`Setting vehicle spawner settings.`);
 
     mod.SetVehicleSpawnerVehicleType(spawner, vehicleType);
     mod.SetVehicleSpawnerAutoSpawn(spawner, true);
     mod.SetVehicleSpawnerRespawnTime(spawner, 1);
 
-    adminDebugTool?.dynamicLog(`Spawning vehicle in 1 second.`);
+    debugTool?.dynamicLog(`Spawning vehicle in 1 second.`);
 
     // We do not want the vehicle spawner to spawn another vehicle after the first one has been destroyed, and if we
     // simply set the auto spawn to false, the vehicle will still exist as an object, which is a waste of resourced.
@@ -60,7 +86,7 @@ async function spawnVehicle(player: mod.Player, vehicleType: mod.VehicleList): P
         // Unsubscribe from the OnVehicleSpawned event as this context no longer needs to know when a vehicle has spawned.
         unsubscribeFromOnVehicleSpawned();
 
-        adminDebugTool?.dynamicLog(`Vehicle spawned.`);
+        debugTool?.dynamicLog(`Vehicle spawned.`);
 
         // Disable automatic vehicle respawning for the spawner as we're going to unspawn it once the vehicle's destroyed.
         mod.SetVehicleSpawnerAutoSpawn(spawner, false);
@@ -72,12 +98,12 @@ async function spawnVehicle(player: mod.Player, vehicleType: mod.VehicleList): P
             // Unsubscribe from the OnVehicleDestroyed event as this context no longer needs to know when the vehicle is destroyed.
             unsubscribeFromOnVehicleDestroyed();
 
-            adminDebugTool?.dynamicLog(`Vehicle destroyed.`);
+            debugTool?.dynamicLog(`Vehicle destroyed.`);
 
             // Unspawn the vehicle spawner.
             mod.UnspawnObject(spawner);
 
-            adminDebugTool?.dynamicLog(`Vehicle spawner unspawned.`);
+            debugTool?.dynamicLog(`Vehicle spawner unspawned.`);
         });
     });
 }
@@ -93,6 +119,11 @@ function createAdminDebugTool(player: mod.Player): void {
          if (mod.GetObjId(player) != 0) return;
     */
    
+    const playerId = mod.GetObjId(player);
+
+    // If this player already has state (e.g. rejoin edge case), clear it first.
+    destroyPlayerDebugState(playerId);
+
     // Create a debug tool with a static logger visible by default.
     const debugToolOptions: DebugTool.Options = {
         staticLogger: {
@@ -106,138 +137,131 @@ function createAdminDebugTool(player: mod.Player): void {
         },
     };
 
-    adminDebugTool = new DebugTool(player, debugToolOptions);
-
-    // Subscribe to vehicle events for loadout management
-    Events.OnPlayerEnterVehicle.subscribe((eventPlayer, vehicle) => {
-        adminDebugTool?.onPlayerEnterVehicle(eventPlayer, vehicle);
-    });
-
-    Events.OnPlayerExitVehicle.subscribe((eventPlayer, vehicle) => {
-        adminDebugTool?.onPlayerExitVehicle(eventPlayer, vehicle);
-    });
+    const debugTool = new DebugTool(player, debugToolOptions);
+    debugToolsByPlayerId.set(playerId, debugTool);
 
     // Create a multi-click detector to open the debug menu when the player triple-clicks the interact key.
     new MultiClickDetector(player, () => {
-        adminDebugTool?.showDebugMenu();
+        debugTool.showDebugMenu();
     });
 
     // Create a jump detector to open the debug menu after 5 jumps within 30 seconds.
-    jumpDetector = new JumpDetector(player, () => {
-        adminDebugTool?.showDebugMenu();
-        adminDebugTool?.dynamicLog('Debug menu opened via 5-jump trigger!');
+    const jumpDetector = new JumpDetector(player, () => {
+        debugTool.showDebugMenu();
+        debugTool.dynamicLog('Debug menu opened via 5-jump trigger!');
     }, (msg) => {
-        adminDebugTool?.dynamicLog(`[JumpDetector] ${msg}`);
+        debugTool.dynamicLog(`[JumpDetector] ${msg}`);
     });
+    jumpDetectorsByPlayerId.set(playerId, jumpDetector);
 
     // Create submenus
-    adminDebugTool?.createSubmenu('adminTools', 'Admin Tools');
-    adminDebugTool?.createSubmenu('spawns', 'Spawns');
-    adminDebugTool?.createSubmenu('groundVehicles', 'Ground Vehicles');
-    adminDebugTool?.createSubmenu('aircraft', 'Aircraft');
-    adminDebugTool?.createSubmenu('helicopters', 'Helicopters');
-    adminDebugTool?.createSubmenu('boats', 'Boats');
+    debugTool.createSubmenu('adminTools', 'Admin Tools');
+    debugTool.createSubmenu('spawns', 'Spawns');
+    debugTool.createSubmenu('groundVehicles', 'Ground Vehicles');
+    debugTool.createSubmenu('aircraft', 'Aircraft');
+    debugTool.createSubmenu('helicopters', 'Helicopters');
+    debugTool.createSubmenu('boats', 'Boats');
 
     // Add main menu buttons
-    adminDebugTool?.addDebugMenuButton(
+    debugTool.addDebugMenuButton(
         mod.Message(mod.stringkeys.debugTool.buttons.adminTools),
         async () => {
-            adminDebugTool?.hideDebugMenu();
-            adminDebugTool?.showSubmenu('adminTools', true);
+            debugTool.hideDebugMenu();
+            debugTool.showSubmenu('adminTools', true);
         }
     );
 
-    adminDebugTool?.addDebugMenuButton(
+    debugTool.addDebugMenuButton(
         mod.Message(mod.stringkeys.debugTool.buttons.spawns),
         async () => {
-            adminDebugTool?.hideDebugMenu();
-            adminDebugTool?.showSubmenu('spawns', true);
+            debugTool.hideDebugMenu();
+            debugTool.showSubmenu('spawns', true);
         }
     );
 
     // Add Spawns submenu buttons (vehicle classifications)
-    adminDebugTool?.addSubmenuButton(
+    debugTool.addSubmenuButton(
         'spawns',
         mod.Message(mod.stringkeys.debugTool.buttons.groundVehicles),
         async () => {
-            adminDebugTool?.showSubmenu('spawns', false);
-            adminDebugTool?.showSubmenu('groundVehicles', true);
+            debugTool.showSubmenu('spawns', false);
+            debugTool.showSubmenu('groundVehicles', true);
         }
     );
 
-    adminDebugTool?.addSubmenuButton(
+    debugTool.addSubmenuButton(
         'spawns',
         mod.Message(mod.stringkeys.debugTool.buttons.aircraft),
         async () => {
-            adminDebugTool?.showSubmenu('spawns', false);
-            adminDebugTool?.showSubmenu('aircraft', true);
+            debugTool.showSubmenu('spawns', false);
+            debugTool.showSubmenu('aircraft', true);
         }
     );
 
-    adminDebugTool?.addSubmenuButton(
+    debugTool.addSubmenuButton(
         'spawns',
         mod.Message(mod.stringkeys.debugTool.buttons.helicopters),
         async () => {
-            adminDebugTool?.showSubmenu('spawns', false);
-            adminDebugTool?.showSubmenu('helicopters', true);
+            debugTool.showSubmenu('spawns', false);
+            debugTool.showSubmenu('helicopters', true);
         }
     );
 
-    adminDebugTool?.addSubmenuButton(
+    debugTool.addSubmenuButton(
         'spawns',
         mod.Message(mod.stringkeys.debugTool.buttons.boats),
         async () => {
-            adminDebugTool?.showSubmenu('spawns', false);
-            adminDebugTool?.showSubmenu('boats', true);
+            debugTool.showSubmenu('spawns', false);
+            debugTool.showSubmenu('boats', true);
         }
     );
 
     // Add Admin Tools submenu buttons
-    adminDebugTool?.addSubmenuButton(
+    debugTool.addSubmenuButton(
         'adminTools',
         mod.Message(mod.stringkeys.debugTool.buttons.showStaticLogger),
         async () => {
-            adminDebugTool?.showStaticLogger();
+            debugTool.showStaticLogger();
         }
     );
 
-    adminDebugTool?.addSubmenuButton(
+    debugTool.addSubmenuButton(
         'adminTools',
         mod.Message(mod.stringkeys.debugTool.buttons.showDynamicLogger),
         async () => {
-            adminDebugTool?.showDynamicLogger();
+            debugTool.showDynamicLogger();
         }
     );
 
-    adminDebugTool?.addSubmenuButton(
+    debugTool.addSubmenuButton(
         'adminTools',
         mod.Message(mod.stringkeys.debugTool.buttons.hideStaticLogger),
         async () => {
-            adminDebugTool?.hideStaticLogger();
+            debugTool.hideStaticLogger();
         }
     );
 
-    adminDebugTool?.addSubmenuButton(
+    debugTool.addSubmenuButton(
         'adminTools',
         mod.Message(mod.stringkeys.debugTool.buttons.hideDynamicLogger),
         async () => {
-            adminDebugTool?.hideDynamicLogger();
+            debugTool.hideDynamicLogger();
         }
     );
 
-    adminDebugTool?.addSubmenuButton(
+    debugTool.addSubmenuButton(
         'adminTools',
         mod.Message(mod.stringkeys.debugTool.buttons.clearStaticLogger),
         async () => {
-            adminDebugTool?.clearStaticLogger();
+            debugTool.clearStaticLogger();
         }
     );
 
-    adminDebugTool?.addSubmenuButton(
+    debugTool.addSubmenuButton(
         'adminTools',
         mod.Message(mod.stringkeys.debugTool.buttons.clearDynamicLogger),
         async () => {
-            adminDebugTool?.clearDynamicLogger();
+            debugTool.clearDynamicLogger();
         }
     );
 
@@ -245,111 +269,111 @@ function createAdminDebugTool(player: mod.Player): void {
     // These are now available under faction vehicle menus
 
     // Add Ground Vehicles (all factions combined)
-    adminDebugTool?.addSubmenuButton(
+    debugTool.addSubmenuButton(
         'groundVehicles',
         mod.Message(mod.stringkeys.debugTool.buttons.spawnAbrams),
         async () => await spawnVehicle(player, mod.VehicleList.Abrams)
     );
 
-    adminDebugTool?.addSubmenuButton(
+    debugTool.addSubmenuButton(
         'groundVehicles',
         mod.Message(mod.stringkeys.debugTool.buttons.spawnCheetah),
         async () => await spawnVehicle(player, mod.VehicleList.Cheetah)
     );
 
-    adminDebugTool?.addSubmenuButton(
+    debugTool.addSubmenuButton(
         'groundVehicles',
         mod.Message(mod.stringkeys.debugTool.buttons.spawnCV90),
         async () => await spawnVehicle(player, mod.VehicleList.CV90)
     );
 
-    adminDebugTool?.addSubmenuButton(
+    debugTool.addSubmenuButton(
         'groundVehicles',
         mod.Message(mod.stringkeys.debugTool.buttons.spawnFlyer60),
         async () => await spawnVehicle(player, mod.VehicleList.Flyer60)
     );
 
-    adminDebugTool?.addSubmenuButton(
+    debugTool.addSubmenuButton(
         'groundVehicles',
         mod.Message(mod.stringkeys.debugTool.buttons.spawnGepard),
         async () => await spawnVehicle(player, mod.VehicleList.Gepard)
     );
 
-    adminDebugTool?.addSubmenuButton(
+    debugTool.addSubmenuButton(
         'groundVehicles',
         mod.Message(mod.stringkeys.debugTool.buttons.spawnGolfCart),
         async () => await spawnVehicle(player, mod.VehicleList.GolfCart)
     );
 
-        adminDebugTool?.addSubmenuButton(
+    debugTool.addSubmenuButton(
         'groundVehicles',
         mod.Message(mod.stringkeys.debugTool.buttons.spawnMarauder),
         async () => await spawnVehicle(player, mod.VehicleList.Marauder)
     );
 
-    adminDebugTool?.addSubmenuButton(
+    debugTool.addSubmenuButton(
         'groundVehicles',
         mod.Message(mod.stringkeys.debugTool.buttons.spawnMarauderPax),
         async () => await spawnVehicle(player, mod.VehicleList.Marauder_Pax)
     );
 
-    adminDebugTool?.addSubmenuButton(
+    debugTool.addSubmenuButton(
         'groundVehicles',
         mod.Message(mod.stringkeys.debugTool.buttons.spawnLeopard),
         async () => await spawnVehicle(player, mod.VehicleList.Leopard)
     );
 
-    adminDebugTool?.addSubmenuButton(
+    debugTool.addSubmenuButton(
         'groundVehicles',
         mod.Message(mod.stringkeys.debugTool.buttons.spawnM2Bradley),
         async () => await spawnVehicle(player, mod.VehicleList.M2Bradley)
     );
 
-    adminDebugTool?.addSubmenuButton(
+    debugTool.addSubmenuButton(
         'groundVehicles',
         mod.Message(mod.stringkeys.debugTool.buttons.spawnQuadbike),
         async () => await spawnVehicle(player, mod.VehicleList.Quadbike)
     );
 
-    adminDebugTool?.addSubmenuButton(
+    debugTool.addSubmenuButton(
         'groundVehicles',
         mod.Message(mod.stringkeys.debugTool.buttons.spawnVector),
         async () => await spawnVehicle(player, mod.VehicleList.Vector)
     );
 
     // Add Aircraft (all factions combined)
-    adminDebugTool?.addSubmenuButton(
+    debugTool.addSubmenuButton(
         'aircraft',
         mod.Message(mod.stringkeys.debugTool.buttons.spawnF16),
         async () => await spawnVehicle(player, mod.VehicleList.F16)
     );
 
-    adminDebugTool?.addSubmenuButton(
+    debugTool.addSubmenuButton(
         'aircraft',
         mod.Message(mod.stringkeys.debugTool.buttons.spawnF22),
         async () => await spawnVehicle(player, mod.VehicleList.F22)
     );
 
-    adminDebugTool?.addSubmenuButton(
+    debugTool.addSubmenuButton(
         'aircraft',
         mod.Message(mod.stringkeys.debugTool.buttons.spawnJAS39),
         async () => await spawnVehicle(player, mod.VehicleList.JAS39)
     );
 
-    adminDebugTool?.addSubmenuButton(
+    debugTool.addSubmenuButton(
         'aircraft',
         mod.Message(mod.stringkeys.debugTool.buttons.spawnSU57),
         async () => await spawnVehicle(player, mod.VehicleList.SU57)
     );
 
     // Add Helicopters (all factions combined)
-    adminDebugTool?.addSubmenuButton(
+    debugTool.addSubmenuButton(
         'helicopters',
         mod.Message(mod.stringkeys.debugTool.buttons.spawnAH64),
         async () => await spawnVehicle(player, mod.VehicleList.AH64)
     );
 
-    adminDebugTool?.addSubmenuButton(
+    debugTool.addSubmenuButton(
         'helicopters',
         mod.Message(mod.stringkeys.debugTool.buttons.spawnEurocopter),
         async () => await spawnVehicle(player, mod.VehicleList.Eurocopter)
@@ -357,86 +381,71 @@ function createAdminDebugTool(player: mod.Player): void {
 
 //Removed Marauders, now under ground vehicles
 
-    adminDebugTool?.addSubmenuButton(
+    debugTool.addSubmenuButton(
         'helicopters',
         mod.Message(mod.stringkeys.debugTool.buttons.spawnUH60),
         async () => await spawnVehicle(player, mod.VehicleList.UH60)
     );
 
-    adminDebugTool?.addSubmenuButton(
+    debugTool.addSubmenuButton(
         'helicopters',
         mod.Message(mod.stringkeys.debugTool.buttons.spawnUH60Pax),
         async () => await spawnVehicle(player, mod.VehicleList.UH60_Pax)
     );
 
     // Add Boats
-    adminDebugTool?.addSubmenuButton(
+    debugTool.addSubmenuButton(
         'boats',
         mod.Message(mod.stringkeys.debugTool.buttons.spawnRHIB),
         async () => await spawnVehicle(player, mod.VehicleList.RHIB)
     );
 
     // Log a message to the static logger.
-    adminDebugTool?.staticLog(`Triple-click interact key to open debug menu.`, 0);
+    debugTool.staticLog(`Triple-click interact key to open debug menu.`, 0);
 }
 
 function destroyAdminDebugTool(playerId: number): void {
-    // If the player is not the admin player, then we know the admin is still in the game, so we can exit this function.
-    if (playerId !== 0) return;
-
-    // Clear the telemetry interval so it doesn't continue to log the admin's position and facing direction,
-    // destroy the jump detector, and destroy the debug tool.
-    Timers.clearInterval(telemetryInterval);
-    jumpDetector?.destroy();
-    adminDebugTool?.destroy();
-    telemetryInterval = undefined;
-    jumpDetector = undefined;
-    adminDebugTool = undefined;
+    destroyPlayerDebugState(playerId);
 }
 
 function showTelemetry(player: mod.Player): void {
-    // The admin player is player id 0 for non-persistent test servers,
-    // so don't do the rest of this unless it's the admin player.
-    
-    /* Note: Commented out this 'if' statement to allow non-admin players to see the position and facing
-     direction telemetry in the static logger for testing and demonstration purposes, specifically to allow 
-     all players in the bb-test-ground map to see their position 
-     and facing direction in the static logger without needing to be the admin player. Doing this mainly to allow all players to have the vehicle spawner buttons
-     in the debug menu. This is useful for testing and demonstration purposes.
-         if (mod.GetObjId(player) != 0) return;
-    */
+    const playerId = mod.GetObjId(player);
+    const debugTool = getDebugToolForPlayer(player);
+    if (!debugTool) return;
 
-    // Log the admin's position and facing direction to the static logger, in rows 1 and 2, every second.
-    telemetryInterval = Timers.setInterval(() => {
-        adminDebugTool?.staticLog(
+    // Replace prior interval for this player if one already exists.
+    const existingInterval = telemetryIntervalsByPlayerId.get(playerId);
+    if (existingInterval !== undefined) {
+        Timers.clearInterval(existingInterval);
+    }
+
+    const telemetryInterval = Timers.setInterval(() => {
+        debugTool.staticLog(
             `Position: ${getPlayerStateVectorString(player, mod.SoldierStateVector.GetPosition)}`,
             1
         );
 
-        adminDebugTool?.staticLog(
+        debugTool.staticLog(
             `Facing: ${getPlayerStateVectorString(player, mod.SoldierStateVector.GetFacingDirection)}`,
             2
         );
     }, 1000);
+
+    telemetryIntervalsByPlayerId.set(playerId, telemetryInterval);
 }
 
 function stopTelemetry(player: mod.Player): void {
-    // The admin player is player id 0 for non-persistent test servers,
-    // so don't do the rest of this unless it's the admin player.
-    /* Note: Commented out this 'if' statement to allow non-admin players to see the position and facing
-     direction telemetry in the static logger for testing and demonstration purposes, specifically to allow 
-     all players in the bb-test-ground map to see their position 
-     and facing direction in the static logger without needing to be the admin player. Doing this mainly to allow all players to have the vehicle spawner buttons
-     in the debug menu. This is useful for testing and demonstration purposes.
-            if (mod.GetObjId(player) != 0) return;
-    */
-    // Clear the telemetry interval so it doesn't continue to log the admin's position and facing direction.
-    Timers.clearInterval(telemetryInterval);
+    const playerId = mod.GetObjId(player);
+    const telemetryInterval = telemetryIntervalsByPlayerId.get(playerId);
+    if (telemetryInterval !== undefined) {
+        Timers.clearInterval(telemetryInterval);
+        telemetryIntervalsByPlayerId.delete(playerId);
+    }
 }
 
 function handlePlayerDeployed(player: mod.Player): void {
-    // Log a message to the dynamic logger that the player has deployed.
-    adminDebugTool?.dynamicLog(`Player ${mod.GetObjId(player)} deployed.`);
+    // Log a message to this player's dynamic logger that they have deployed.
+    getDebugToolForPlayer(player)?.dynamicLog(`Player ${mod.GetObjId(player)} deployed.`);
 
     // Get the current map (Can be undefined if the map cannot be determined).
     const map = MapDetector.currentMap();
@@ -453,6 +462,12 @@ function handlePlayerDeployed(player: mod.Player): void {
 
 // Event subscriptions for the admin debug tool.
 Events.OnPlayerJoinGame.subscribe(createAdminDebugTool);
+Events.OnPlayerEnterVehicle.subscribe((player, vehicle) => {
+    getDebugToolForPlayer(player)?.onPlayerEnterVehicle(player, vehicle);
+});
+Events.OnPlayerExitVehicle.subscribe((player, vehicle) => {
+    getDebugToolForPlayer(player)?.onPlayerExitVehicle(player, vehicle);
+});
 Events.OnPlayerDeployed.subscribe(showTelemetry);
 Events.OnPlayerUndeploy.subscribe(stopTelemetry);
 Events.OnPlayerLeaveGame.subscribe(destroyAdminDebugTool);
@@ -469,12 +484,59 @@ and have the ability to drop armor plates from their inventory onto the ground. 
 // Armor helpers
 // -----------------------------------------------------------------------------
 
+function givePlayerSpawnAmmo(player: mod.Player): void {
+    const primaryMagAmmo = armorMod.GetInventoryMagazineAmmo(player, mod.InventorySlots.PrimaryWeapon);
+    if (primaryMagAmmo > 0) {
+        armorMod.SetInventoryAmmo(player, mod.InventorySlots.PrimaryWeapon, primaryMagAmmo * 3);
+    }
+
+    const secondaryMagAmmo = armorMod.GetInventoryMagazineAmmo(player, mod.InventorySlots.SecondaryWeapon);
+    if (secondaryMagAmmo > 0) {
+        armorMod.SetInventoryAmmo(player, mod.InventorySlots.SecondaryWeapon, secondaryMagAmmo * 3);
+    }
+}
+
+function tryResupplyFromNearbyAmmoBox(player: mod.Player, playerPosition: mod.Vector): boolean {
+    const playerId = mod.GetObjId(player);
+    const now = mod.GetMatchTimeElapsed();
+    const lastResupply = lastAmmoResupplyByPlayerId.get(playerId);
+
+    if (lastResupply !== undefined && now - lastResupply < AMMO_RESUPPLY_COOLDOWN_MS) {
+        return false;
+    }
+
+    const nearby = armorMod.GetObjectsInRange(playerPosition, 2);
+    const ammoPickupTypes = [armorMod.PickupType.AmmoBox, armorMod.PickupType.AmmoCrate].filter(
+        (value): value is number => value !== undefined
+    );
+
+    if (ammoPickupTypes.length === 0) return false;
+
+    for (const obj of nearby) {
+        if (armorMod.GetObjectType(obj) !== armorMod.ObjectType.Pickup) continue;
+
+        const pickupType = armorMod.GetPickupType(obj);
+        if (!ammoPickupTypes.includes(pickupType)) continue;
+
+        const ammoResupplyType = armorMod.ResupplyTypes.AmmoBox ?? armorMod.ResupplyTypes.AmmoCrate;
+        if (ammoResupplyType === undefined) return false;
+
+        armorMod.Resupply(player, ammoResupplyType);
+        lastAmmoResupplyByPlayerId.set(playerId, now);
+        getDebugToolForPlayer(player)?.dynamicLog('Resupplied from nearby ammo box.');
+        return true;
+    }
+
+    return false;
+}
+
 /**
- * Called when a player deploys; grant basic protection and a spare plate.
+ * Called when a player deploys; grant armor and baseline ammo reserves.
  */
 function givePlayerArmor(player: mod.Player): void {
     armorMod.SetSoldierArmorLevel(player, 1);
     armorMod.GiveInventoryItem(player, armorMod.WeaponList.ArmorPlate, 1);
+    givePlayerSpawnAmmo(player);
 }
 
 /**
@@ -485,6 +547,10 @@ function givePlayerArmor(player: mod.Player): void {
 function handleArmorInteract(player: mod.Player): void {
     const plateCount = armorMod.GetInventoryItemCount(player, armorMod.WeaponList.ArmorPlate);
     const playerPosition = mod.GetSoldierState(player, mod.SoldierStateVector.GetPosition);
+    const debugTool = getDebugToolForPlayer(player);
+
+    // Prioritize ammo-box interaction so players can resupply from any nearby box.
+    if (tryResupplyFromNearbyAmmoBox(player, playerPosition)) return;
 
     // look for a nearby armor plate pickup
     const nearby = armorMod.GetObjectsInRange(playerPosition, 2);
@@ -494,7 +560,7 @@ function handleArmorInteract(player: mod.Player): void {
             armorMod.GetPickupType(obj) === armorMod.PickupType.ArmorPlate
         ) {
             if (plateCount >= 3) {
-                adminDebugTool?.dynamicLog('Armor inventory full (3).');
+                debugTool?.dynamicLog('Armor inventory full (3).');
             } else {
                 armorMod.PickupObject(player, obj);
             }

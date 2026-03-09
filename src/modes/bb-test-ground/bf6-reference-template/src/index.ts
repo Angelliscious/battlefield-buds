@@ -84,8 +84,14 @@ async function spawnVehicle(player: mod.Player, vehicleType: mod.VehicleList): P
 function createAdminDebugTool(player: mod.Player): void {
     // The admin player is player id 0 for non-persistent test servers,
     // so don't do the rest of this unless it's the admin player.
-    if (mod.GetObjId(player) != 0) return;
-
+    /* Note: Commented out this 'if' statement to allow non-admin players to see the position and facing
+     direction telemetry in the static logger for testing and demonstration purposes, specifically to allow 
+     all players in the bb-test-ground map to see their position 
+     and facing direction in the static logger without needing to be the admin player. Doing this mainly to allow all players to have the vehicle spawner buttons
+     in the debug menu. This is useful for testing and demonstration purposes.
+         if (mod.GetObjId(player) != 0) return;
+    */
+   
     // Create a debug tool with a static logger visible by default.
     const debugToolOptions: DebugTool.Options = {
         staticLogger: {
@@ -390,7 +396,14 @@ function destroyAdminDebugTool(playerId: number): void {
 function showTelemetry(player: mod.Player): void {
     // The admin player is player id 0 for non-persistent test servers,
     // so don't do the rest of this unless it's the admin player.
-    if (mod.GetObjId(player) != 0) return;
+    
+    /* Note: Commented out this 'if' statement to allow non-admin players to see the position and facing
+     direction telemetry in the static logger for testing and demonstration purposes, specifically to allow 
+     all players in the bb-test-ground map to see their position 
+     and facing direction in the static logger without needing to be the admin player. Doing this mainly to allow all players to have the vehicle spawner buttons
+     in the debug menu. This is useful for testing and demonstration purposes.
+         if (mod.GetObjId(player) != 0) return;
+    */
 
     // Log the admin's position and facing direction to the static logger, in rows 1 and 2, every second.
     telemetryInterval = Timers.setInterval(() => {
@@ -409,8 +422,13 @@ function showTelemetry(player: mod.Player): void {
 function stopTelemetry(player: mod.Player): void {
     // The admin player is player id 0 for non-persistent test servers,
     // so don't do the rest of this unless it's the admin player.
-    if (mod.GetObjId(player) != 0) return;
-
+    /* Note: Commented out this 'if' statement to allow non-admin players to see the position and facing
+     direction telemetry in the static logger for testing and demonstration purposes, specifically to allow 
+     all players in the bb-test-ground map to see their position 
+     and facing direction in the static logger without needing to be the admin player. Doing this mainly to allow all players to have the vehicle spawner buttons
+     in the debug menu. This is useful for testing and demonstration purposes.
+            if (mod.GetObjId(player) != 0) return;
+    */
     // Clear the telemetry interval so it doesn't continue to log the admin's position and facing direction.
     Timers.clearInterval(telemetryInterval);
 }

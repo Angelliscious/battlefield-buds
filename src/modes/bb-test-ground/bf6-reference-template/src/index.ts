@@ -7,6 +7,7 @@ import { Vectors } from 'bf6-portal-utils/vectors/index.ts';
 import { DebugTool } from './debug-tool/index.ts';
 import { getPlayerStateVectorString } from './helpers/index.ts';
 import { JumpDetector } from './jump-detector/index.ts';
+import { armorEvents, armorMod } from './armor-api.ts';
 
 let adminDebugTool: DebugTool | undefined;
 let telemetryInterval: number | undefined;
@@ -458,3 +459,73 @@ Events.OnPlayerLeaveGame.subscribe(destroyAdminDebugTool);
 
 // Event subscriptions for notifying players of their name and the current map.
 Events.OnPlayerDeployed.subscribe(handlePlayerDeployed);
+
+/* Armor Functionality - This sections outlines all armor related functions, 
+It makes it possible for players to spawn in with one level of armor by default and have one extra armor plate in their inventory, 
+have the abilty to carry a max of 3 plates of armor in their inventory. Allow players to pick up armor plates from the ground, 
+and have the ability to drop armor plates from their inventory onto the ground. Players will also only be able to have one level of amor protection active at a time. 
+*/
+// -----------------------------------------------------------------------------
+// Armor helpers
+// -----------------------------------------------------------------------------
+
+/**
+ * Called when a player deploys; grant basic protection and a spare plate.
+ */
+function givePlayerArmor(player: mod.Player): void {
+    armorMod.SetSoldierArmorLevel(player, 1);
+    armorMod.GiveInventoryItem(player, armorMod.WeaponList.ArmorPlate, 1);
+}
+
+/**
+ * Unified interact-key handler.  If there's a plate on the ground in front of
+ * the player and the inventory isn't full (3 plates max) we pick it up;
+ * otherwise we drop one from inventory, provided we have any.
+ */
+function handleArmorInteract(player: mod.Player): void {
+    const plateCount = armorMod.GetInventoryItemCount(player, armorMod.WeaponList.ArmorPlate);
+    const playerPosition = mod.GetSoldierState(player, mod.SoldierStateVector.GetPosition);
+
+    // look for a nearby armor plate pickup
+    const nearby = armorMod.GetObjectsInRange(playerPosition, 2);
+    for (const obj of nearby) {
+        if (
+            armorMod.GetObjectType(obj) === armorMod.ObjectType.Pickup &&
+            armorMod.GetPickupType(obj) === armorMod.PickupType.ArmorPlate
+        ) {
+            if (plateCount >= 3) {
+                adminDebugTool?.dynamicLog('Armor inventory full (3).');
+            } else {
+                armorMod.PickupObject(player, obj);
+            }
+            return; // either picked up or skipped; don't also drop
+        }
+    }
+
+    // nothing to pick up; drop one if we have any plates
+    if (plateCount > 0) {
+        const facing = mod.GetSoldierState(player, mod.SoldierStateVector.GetFacingDirection);
+        const dropPos = mod.CreateVector(
+            mod.XComponentOf(playerPosition) + mod.XComponentOf(facing) * 2,
+            mod.YComponentOf(playerPosition),
+            mod.ZComponentOf(playerPosition) + mod.ZComponentOf(facing) * 2
+        );
+        armorMod.DropInventoryItem(player, armorMod.WeaponList.ArmorPlate, dropPos);
+    }
+}
+
+/**
+ * Clean up when a player dies: remove active armor and flush plates.
+ */
+function onPlayerDeath(player: mod.Player): void {
+    armorMod.SetSoldierArmorLevel(player, 0);
+    const currentArmorPlates = armorMod.GetInventoryItemCount(player, armorMod.WeaponList.ArmorPlate);
+    if (currentArmorPlates > 0) {
+        armorMod.RemoveInventoryItem(player, armorMod.WeaponList.ArmorPlate, currentArmorPlates);
+    }
+}
+
+// register
+Events.OnPlayerDeployed.subscribe(givePlayerArmor);
+armorEvents.OnInteractKeyPressed.subscribe(handleArmorInteract);
+armorEvents.OnPlayerDeath.subscribe(onPlayerDeath);

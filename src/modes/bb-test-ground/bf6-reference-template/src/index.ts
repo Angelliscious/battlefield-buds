@@ -7,40 +7,10 @@ import { Vectors } from 'bf6-portal-utils/vectors/index.ts';
 import { DebugTool } from './debug-tool/index.ts';
 import { getPlayerStateVectorString } from './helpers/index.ts';
 import { JumpDetector } from './jump-detector/index.ts';
-import { armorMod } from './armor-api.ts';
 
 const debugToolsByPlayerId = new Map<number, DebugTool>();
 const telemetryIntervalsByPlayerId = new Map<number, number>();
 const jumpDetectorsByPlayerId = new Map<number, JumpDetector>();
-const lastAmmoResupplyByPlayerId = new Map<number, number>();
-const lastAmmoSourceCheckByPlayerId = new Map<number, number>();
-const armorPlatesByPlayerId = new Map<number, number>();
-const lastArmorPickupCheckByPlayerId = new Map<number, number>();
-
-type DroppedArmorPlate = {
-    spawner: mod.LootSpawner;
-    position: mod.Vector;
-    expiresAt: number;
-};
-
-type DroppedBackpack = {
-    spawner: mod.LootSpawner;
-    position: mod.Vector;
-    expiresAt: number;
-};
-
-const droppedArmorPlates: DroppedArmorPlate[] = [];
-const droppedBackpacks: DroppedBackpack[] = [];
-
-const AMMO_RESUPPLY_COOLDOWN_SECONDS = 1;
-const AMMO_SOURCE_CHECK_INTERVAL_SECONDS = 0.1;
-const AMMO_SOURCE_DETECTION_RANGE_METERS = 4;
-const ARMOR_PICKUP_CHECK_INTERVAL_SECONDS = 0.2;
-const ARMOR_PLATE_PICKUP_RANGE_METERS = 2;
-const ARMOR_PLATE_DROP_DISTANCE_METERS = 2;
-const ARMOR_PLATE_MAX_INVENTORY = 3;
-const ARMOR_PLATE_DROP_LIFETIME_SECONDS = 120;
-const BACKPACK_DROP_LIFETIME_SECONDS = 60;
 
 function getDebugToolForPlayer(player: mod.Player): DebugTool | undefined {
     return debugToolsByPlayerId.get(mod.GetObjId(player));
@@ -60,127 +30,6 @@ function destroyPlayerDebugState(playerId: number): void {
     const debugTool = debugToolsByPlayerId.get(playerId);
     debugTool?.destroy();
     debugToolsByPlayerId.delete(playerId);
-
-    lastAmmoResupplyByPlayerId.delete(playerId);
-    lastAmmoSourceCheckByPlayerId.delete(playerId);
-    armorPlatesByPlayerId.delete(playerId);
-    lastArmorPickupCheckByPlayerId.delete(playerId);
-}
-
-function getArmorPlateCount(player: mod.Player): number {
-    if (armorMod.WeaponList?.ArmorPlate !== undefined && armorMod.GetInventoryItemCount !== undefined) {
-        try {
-            return armorMod.GetInventoryItemCount(player, armorMod.WeaponList.ArmorPlate);
-        } catch {
-            // Fallback to Map if inventory system fails
-        }
-    }
-    return armorPlatesByPlayerId.get(mod.GetObjId(player)) ?? 0;
-}
-
-function setArmorPlateCount(player: mod.Player, count: number): void {
-    const clamped = Math.max(0, Math.min(ARMOR_PLATE_MAX_INVENTORY, count));
-    armorPlatesByPlayerId.set(mod.GetObjId(player), clamped);
-    
-    // Update the actual game inventory
-    if (armorMod.WeaponList?.ArmorPlate !== undefined && armorMod.GiveInventoryItem !== undefined && armorMod.RemoveInventoryItem !== undefined) {
-        try {
-            const currentCount = armorMod.GetInventoryItemCount(player, armorMod.WeaponList.ArmorPlate);
-            const difference = clamped - currentCount;
-            
-            if (difference > 0) {
-                armorMod.GiveInventoryItem(player, armorMod.WeaponList.ArmorPlate, difference);
-            } else if (difference < 0) {
-                armorMod.RemoveInventoryItem(player, armorMod.WeaponList.ArmorPlate, Math.abs(difference));
-            }
-        } catch {
-            // Silently fail if inventory operations aren't available
-        }
-    }
-}
-
-function spawnDroppedArmorPlate(position: mod.Vector): void {
-    const spawner = mod.SpawnObject(
-        mod.RuntimeSpawn_Common.LootSpawner,
-        position,
-        mod.CreateVector(0, 0, 0)
-    ) as mod.LootSpawner;
-
-    mod.SpawnLoot(spawner, mod.AmmoTypes.Armor_Plate);
-
-    droppedArmorPlates.push({
-        spawner,
-        position,
-        expiresAt: mod.GetMatchTimeElapsed() + ARMOR_PLATE_DROP_LIFETIME_SECONDS,
-    });
-}
-
-function spawnDroppedBackpack(position: mod.Vector): void {
-    const spawner = mod.SpawnObject(
-        mod.RuntimeSpawn_Common.LootSpawner,
-        position,
-        mod.CreateVector(0, 0, 0)
-    ) as mod.LootSpawner;
-
-    // Spawn AR ammo type as backpack representation
-    mod.SpawnLoot(spawner, mod.AmmoTypes.AR_Carbine_Ammo);
-
-    droppedBackpacks.push({
-        spawner,
-        position,
-        expiresAt: mod.GetMatchTimeElapsed() + BACKPACK_DROP_LIFETIME_SECONDS,
-    });
-}
-
-function cleanupExpiredArmorPlates(): void {
-    const now = mod.GetMatchTimeElapsed();
-    for (let i = droppedArmorPlates.length - 1; i >= 0; i--) {
-        const drop = droppedArmorPlates[i];
-        if (drop.expiresAt > now) continue;
-        mod.UnspawnObject(drop.spawner);
-        droppedArmorPlates.splice(i, 1);
-    }
-}
-
-function cleanupExpiredBackpacks(): void {
-    const now = mod.GetMatchTimeElapsed();
-    for (let i = droppedBackpacks.length - 1; i >= 0; i--) {
-        const drop = droppedBackpacks[i];
-        if (drop.expiresAt > now) continue;
-        mod.UnspawnObject(drop.spawner);
-        droppedBackpacks.splice(i, 1);
-    }
-}
-
-function tryPickupNearbyArmorPlate(player: mod.Player, playerPosition: mod.Vector): boolean {
-    const currentPlates = getArmorPlateCount(player);
-    if (currentPlates >= ARMOR_PLATE_MAX_INVENTORY) return false;
-
-    for (let i = droppedArmorPlates.length - 1; i >= 0; i--) {
-        const drop = droppedArmorPlates[i];
-        if (mod.DistanceBetween(playerPosition, drop.position) > ARMOR_PLATE_PICKUP_RANGE_METERS) continue;
-
-        mod.UnspawnObject(drop.spawner);
-        droppedArmorPlates.splice(i, 1);
-        setArmorPlateCount(player, currentPlates + 1);
-        getDebugToolForPlayer(player)?.dynamicLog(
-            `Picked up armor plate. Plates: ${getArmorPlateCount(player)}/${ARMOR_PLATE_MAX_INVENTORY}`
-        );
-        return true;
-    }
-
-    return false;
-}
-
-function tryAutoPickupArmorPlate(player: mod.Player): void {
-    const playerId = mod.GetObjId(player);
-    const now = mod.GetMatchTimeElapsed();
-    const lastCheck = lastArmorPickupCheckByPlayerId.get(playerId);
-    if (lastCheck !== undefined && now - lastCheck < ARMOR_PICKUP_CHECK_INTERVAL_SECONDS) return;
-    lastArmorPickupCheckByPlayerId.set(playerId, now);
-
-    const playerPosition = mod.GetSoldierState(player, mod.SoldierStateVector.GetPosition);
-    tryPickupNearbyArmorPlate(player, playerPosition);
 }
 
 async function spawnVehicle(player: mod.Player, vehicleType: mod.VehicleList): Promise<void> {
@@ -577,11 +426,6 @@ function showTelemetry(player: mod.Player): void {
             `Facing: ${getPlayerStateVectorString(player, mod.SoldierStateVector.GetFacingDirection)}`,
             2
         );
-
-        debugTool.staticLog(
-            `Armor Plates: ${getArmorPlateCount(player)}/${ARMOR_PLATE_MAX_INVENTORY}`,
-            3
-        );
     }, 1000);
 
     telemetryIntervalsByPlayerId.set(playerId, telemetryInterval);
@@ -624,12 +468,6 @@ Events.OngoingPlayer.subscribe((player) => {
     if (!getDebugToolForPlayer(player)) {
         createAdminDebugTool(player);
     }
-
-    // Passive proximity checks for custom pickups
-    cleanupExpiredArmorPlates();
-    cleanupExpiredBackpacks();
-    tryPickupNearbyBackpack(player, mod.GetSoldierState(player, mod.SoldierStateVector.GetPosition));
-    tryAutoPickupArmorPlate(player);
 });
 Events.OnPlayerEnterVehicle.subscribe((player, vehicle) => {
     getDebugToolForPlayer(player)?.onPlayerEnterVehicle(player, vehicle);
@@ -643,106 +481,3 @@ Events.OnPlayerLeaveGame.subscribe(destroyAdminDebugTool);
 
 // Event subscriptions for notifying players of their name and the current map.
 Events.OnPlayerDeployed.subscribe(handlePlayerDeployed);
-
-/* Armor Functionality - This sections outlines all armor related functions, 
-It makes it possible for players to spawn in with one level of armor by default and have one extra armor plate in their inventory, 
-have the abilty to carry a max of 3 plates of armor in their inventory. Allow players to pick up armor plates from the ground, 
-and have the ability to drop armor plates from their inventory onto the ground. Players will also only be able to have one level of amor protection active at a time. 
-*/
-// -----------------------------------------------------------------------------
-// Armor helpers
-// -----------------------------------------------------------------------------
-
-function tryPickupNearbyBackpack(player: mod.Player, playerPosition: mod.Vector): boolean {
-    const playerId = mod.GetObjId(player);
-    const now = mod.GetMatchTimeElapsed();
-    const lastResupply = lastAmmoResupplyByPlayerId.get(playerId);
-
-    if (lastResupply !== undefined && now - lastResupply < AMMO_RESUPPLY_COOLDOWN_SECONDS) {
-        return false;
-    }
-
-    // Check for dropped backpacks and pick them up
-    for (let i = droppedBackpacks.length - 1; i >= 0; i--) {
-        const drop = droppedBackpacks[i];
-        if (mod.DistanceBetween(playerPosition, drop.position) > AMMO_SOURCE_DETECTION_RANGE_METERS) continue;
-
-        // Player is near a dropped backpack - use PickupObject for natural ammo flow
-        try {
-            if (armorMod.PickupObject) {
-                armorMod.PickupObject(player, drop.spawner as unknown as any);
-            }
-        } catch {
-            // If PickupObject doesn't work, just remove the backpack visually
-        }
-        
-        mod.UnspawnObject(drop.spawner);
-        droppedBackpacks.splice(i, 1);
-        lastAmmoResupplyByPlayerId.set(playerId, now);
-        getDebugToolForPlayer(player)?.dynamicLog('Picked up backpack ammo.');
-        return true;
-    }
-
-    return false;
-}
-
-/**
- * Called when a player deploys; grant armor and initial armor plate.
- */
-function givePlayerArmor(player: mod.Player): void {
-    mod.AddEquipment(player, mod.ArmorTypes.SoftArmor);
-    setArmorPlateCount(player, 1);
-    getDebugToolForPlayer(player)?.dynamicLog('Spawn armor applied. Plates: 1/3');
-    // Ammo is handled by the game's normal spawn loadout system
-}
-
-/**
- * Unified interact-key handler.  If there's a plate on the ground in front of
- * the player and the inventory isn't full (3 plates max) we pick it up;
- * otherwise we drop one from inventory, provided we have any.
- */
-function handleArmorInteract(player: mod.Player): void {
-    const plateCount = getArmorPlateCount(player);
-    const playerPosition = mod.GetSoldierState(player, mod.SoldierStateVector.GetPosition);
-    const debugTool = getDebugToolForPlayer(player);
-
-    // Pick up any nearby dropped armor plates.
-    if (tryPickupNearbyArmorPlate(player, playerPosition)) return;
-
-    // nothing to pick up; drop one if we have any plates
-    if (plateCount > 0) {
-        const facing = mod.GetSoldierState(player, mod.SoldierStateVector.GetFacingDirection);
-        const dropPos = mod.CreateVector(
-            mod.XComponentOf(playerPosition) + mod.XComponentOf(facing) * ARMOR_PLATE_DROP_DISTANCE_METERS,
-            mod.YComponentOf(playerPosition),
-            mod.ZComponentOf(playerPosition) + mod.ZComponentOf(facing) * ARMOR_PLATE_DROP_DISTANCE_METERS
-        );
-        spawnDroppedArmorPlate(dropPos);
-        setArmorPlateCount(player, plateCount - 1);
-        debugTool?.dynamicLog(`Dropped armor plate. Plates: ${getArmorPlateCount(player)}/${ARMOR_PLATE_MAX_INVENTORY}`);
-    } else {
-        debugTool?.dynamicLog('No armor plates to drop.');
-    }
-}
-
-/**
- * Clean up when a player dies: remove active armor and flush plates, drop backpack with ammo.
- */
-function onPlayerDeath(player: mod.Player): void {
-    // Drop backpack at death location for other players to pick up ammo from
-    const deathPosition = mod.GetSoldierState(player, mod.SoldierStateVector.GetPosition);
-    spawnDroppedBackpack(deathPosition);
-    
-    // Remove armor and plates
-    mod.AddEquipment(player, mod.ArmorTypes.NoArmor);
-    setArmorPlateCount(player, 0);
-}
-
-// register
-Events.OnPlayerDeployed.subscribe(givePlayerArmor);
-Events.OnPlayerInteract.subscribe((player) => {
-    handleArmorInteract(player);
-});
-Events.OnPlayerDied.subscribe((player) => {
-    onPlayerDeath(player);
-});

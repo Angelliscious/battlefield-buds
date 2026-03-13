@@ -487,12 +487,6 @@ Events.OngoingPlayer.subscribe((player) => {
         createAdminDebugTool(player);
     }
 });
-Events.OnPlayerEnterVehicle.subscribe((player, vehicle) => {
-    getDebugToolForPlayer(player)?.onPlayerEnterVehicle(player, vehicle);
-});
-Events.OnPlayerExitVehicle.subscribe((player, vehicle) => {
-    getDebugToolForPlayer(player)?.onPlayerExitVehicle(player, vehicle);
-});
 Events.OnPlayerDeployed.subscribe(showTelemetry);
 Events.OnPlayerUndeploy.subscribe(stopTelemetry);
 Events.OnPlayerLeaveGame.subscribe(destroyAdminDebugTool);

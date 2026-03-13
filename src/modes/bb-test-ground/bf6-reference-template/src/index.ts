@@ -8,6 +8,7 @@ import { DebugTool } from './debug-tool/index.ts';
 import { getPlayerStateVectorString } from './helpers/index.ts';
 import { JumpDetector } from './jump-detector/index.ts';
 
+
 const debugToolsByPlayerId = new Map<number, DebugTool>();
 const telemetryIntervalsByPlayerId = new Map<number, number>();
 const jumpDetectorsByPlayerId = new Map<number, JumpDetector>();
@@ -461,6 +462,23 @@ function handlePlayerDeployed(player: mod.Player): void {
     }
 }
 
+function applyStartingArmor(player: mod.Player): void {
+    // Apply one level of armor.
+    mod.AddEquipment(player, mod.ArmorTypes.CeramicArmor);
+
+    // Give one armor plate in inventory.
+    mod.SetInventoryAmmo(player, mod.InventorySlots.MiscGadget, 1);
+}
+
+/*   Armor Section Needs to be completed
+mod.SetInventoryMagazineAmmo(player, mod.InventorySlots.PrimaryWeapon, 150);
+mod.SetInventoryMagazineAmmo(player, mod.InventorySlots.SecondaryWeapon, 30);
+
+applyStartingArmor(player);
+*/
+
+
+
 // Event subscriptions for the admin debug tool.
 Events.OnPlayerJoinGame.subscribe(createAdminDebugTool);
 Events.OngoingPlayer.subscribe((player) => {
@@ -480,4 +498,4 @@ Events.OnPlayerUndeploy.subscribe(stopTelemetry);
 Events.OnPlayerLeaveGame.subscribe(destroyAdminDebugTool);
 
 // Event subscriptions for notifying players of their name and the current map.
-Events.OnPlayerDeployed.subscribe(handlePlayerDeployed);
+Events.OnPlayerDeployed.subscribe(handlePlayerDeployed);    

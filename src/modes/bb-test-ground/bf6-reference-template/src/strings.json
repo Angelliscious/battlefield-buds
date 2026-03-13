@@ -1,16 +1,16 @@
 {
     "template": {
         "debug": {
-            "buttons": {
-                "spawnHelicopter": "Spawn Helicopter",
-                "spawnGolfCart": "Spawn Golf Cart"
-            }
+          
         },
         "notifications": {
+
             "deployed": "You are {}",
             "deployedOnMap": "You are {} on {}"
+       
         },
         "maps": {
+       
             "Area 22B": "Area 22B",
             "Blackwell Fields": "Blackwell Fields",
             "Defense Nexus": "Defense Nexus",
@@ -29,6 +29,7 @@
             "Redline Storage": "Redline Storage",
             "Saints Quarter": "Saints Quarter",
             "Siege of Cairo": "Siege of Cairo"
+
         }
     }
 }

@@ -203,10 +203,10 @@ function createAdminDebugTool(player: mod.Player): void {
 
     debugTool.addSubmenuButton(
         'spawns',
-        mod.Message(mod.stringkeys.debugTool.buttons.boats),
+        mod.Message(mod.stringkeys.debugTool.buttons.spawnBoats),
         async () => {
             debugTool.showSubmenu('spawns', false);
-            debugTool.showSubmenu('boats', true);
+            debugTool.showSubmenu('spawnBoats', true);
         }
     );
 
@@ -469,15 +469,10 @@ function applyStartingArmor(player: mod.Player): void {
     // Give one armor plate in inventory.
     mod.SetInventoryAmmo(player, mod.InventorySlots.MiscGadget, 1);
 }
-
-/*   Armor Section Needs to be completed
-mod.SetInventoryMagazineAmmo(player, mod.InventorySlots.PrimaryWeapon, 150);
-mod.SetInventoryMagazineAmmo(player, mod.InventorySlots.SecondaryWeapon, 30);
-
-applyStartingArmor(player);
-*/
-
-
+//Event subscription for applying starting armor to players when they join the game.
+Events.OnPlayerJoinGame.subscribe((player) => {
+    applyStartingArmor(player);
+});
 
 // Event subscriptions for the admin debug tool.
 Events.OnPlayerJoinGame.subscribe(createAdminDebugTool);

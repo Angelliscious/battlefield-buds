@@ -1,8 +1,6 @@
 {
     "debugTool": {
         "buttons": {
-            "toggleStaticLogger": "Toggle Static Logger",
-            "toggleDynamicLogger": "Toggle Dynamic Logger",
             "clearStaticLogger": "Clear Static Logger",
             "clearDynamicLogger": "Clear Dynamic Logger",
             "close": "Close",
@@ -28,7 +26,7 @@
             "spawnGepard": "Spawn Cheetah 1A2 (NATO)",
             "spawnCheetah": "Spawn GE-26 (PAX)",
 
-            "spawnboats": "Spawn Boats",
+            "spawnBoats": "Spawn Boats",
             "spawnRHIB": "Spawn RHIB Boat",
 
             "helicopters": "Spawn Helicopters",
